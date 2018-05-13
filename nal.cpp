@@ -147,10 +147,10 @@ int Nal::read_nal()
 
 unsigned char* Nal::get_nal_payload()
 {
-    if (start_code_found)
-        return nal_payload;
-    else
+    if (nal_offset < 0)
         return NULL;
+    else
+        return nal_payload;
 }
 
 int Nal::get_nal_offset()

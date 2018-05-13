@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <unistd.h>
 
+using namespace std;
 
 static const char* nut_name[] = {
     "TRAIL_N",          // 0
@@ -48,15 +49,23 @@ static const char* nut_name[] = {
     "SUFFIX_SEI_NUT",   // 40
 };
 
-#define VPS_MASK ((1 << 32))
-#define SPS_MASK ((1 << 33))
-#define PPS_MASK ((1 << 34))
-#define AUD_MASK ((1 << 35))
-
-#define IDR_MASK ((1 << 19) | (1 << 20))
-#define CRA_MASK ((1 << 21))
-#define BLA_MASK ((1 << 16) | (1 << 17) | (1 << 18))
-#define VCL_MASK (0xFFFFFFFF) // [31:0]
+enum
+{
+    NUT_VCL_START   =  0,
+    NUT_VCL_END     = 31,
+    NUT_RAP_START   = 16,
+    NUT_RAP_END     = 23,
+    NUT_VPS         = 32,
+    NUT_SPS         = 33,
+    NUT_PPS         = 34,
+    NUT_AUD         = 35,
+    NUT_EOS         = 36,
+    NUT_EOB         = 37,
+    NUT_FD          = 38,
+    NUT_PREFIX_SEI  = 39,
+    NUT_SUFFIX_SEI  = 40,
+    NUT_NUM         = 41
+};
 
 #define MAX_NUM_VPS 1 // [FIXME]
 #define MAX_NUM_SPS 1 // [FIXME]
@@ -68,17 +77,20 @@ static char* outfile = NULL;
 
 static int verbose = 0;
 
-void parse_option(int argc, char** argv);
-void print_usage(char* executable);
-void print_options();
+static FILE* out = NULL;
+
+static void parse_option(int argc, char** argv);
+static void print_usage(char* executable);
+static void print_options();
+
+static int outfile_open();
+static int outfile_write(unsigned char* payload, int size);
+static void outfile_close();
 
 int main(int argc, char** argv)
 {
     int nut;
     int i;
-
-    const unsigned char shoft_startcode[] = { '\0', '\0', '\1' };
-    const unsigned char long_startcode[] = { '\0', '\0', '\0', '\1' };
 
     int frame_idx = -1;
     int rap_found = 0;
@@ -104,7 +116,14 @@ int main(int argc, char** argv)
 
     HevcNal nal(infile);
 
-    while (frame_idx < 100)
+    // open outfile
+    if (!outfile_open())
+    {
+        fprintf(stderr, "outfile(%s) open failed\n", outfile);
+        return 1;
+    }
+
+    while (1)
     {
         nal.read_nal();
 
@@ -114,12 +133,12 @@ int main(int argc, char** argv)
             break;
 
         // VCL
-        if (nut < 32 && nal.get_first_slice_flag())
+        if (nut <= NUT_VCL_END && nal.get_first_slice_flag())
         {
             frame_idx++;
         }
 
-        if (frame_idx >= start && nut >= 16 && nut <= 23)
+        if (frame_idx >= start && nut >= NUT_RAP_START && nut <= NUT_RAP_END)
         {
             if (!rap_found)
             {
@@ -130,30 +149,33 @@ int main(int argc, char** argv)
 
         if (rap_found)
         {
-            //fwrite(long_startcode, 1, 4, outfile);
-            //fwrite(nal.get_payload(), 1, nal.get_payload_size(), outfile);
+            outfile_write(nal.get_nal_payload(), nal.get_nal_size());
         }
-        else if (nut < 36 && nut > 32)
+        else if (nut >= NUT_VPS && nut <= NUT_PPS)
         {
             // VPS/SPS/PPS
-
-            //fwrite(long_startcode, 1, 4, outfile);
-            //fwrite(nal.get_payload(), 1, nal.get_payload_size(), outfile);
+            outfile_write(nal.get_nal_payload(), nal.get_nal_size());
         }
 
         if (verbose)
         {
-            if (nut < 41)
+            if (nut < NUT_NUM)
                 fprintf(stdout, "nal found at 0x%x and nut is %s\n", nal.get_nal_offset(), nut_name[nut]);
-            if (nut < 32)
+            if (nut < NUT_VCL_END)
                 fprintf(stdout, "frame_idx: %d - first slice flag: %d\n", frame_idx, nal.get_first_slice_flag());
         }
     }
 
+    if (!rap_found)
+        fprintf(stdout, "random access point not found\n");
+
+    // close outfile
+    outfile_close();
+
     return 0;
 }
 
-void parse_option(int argc, char** argv)
+static void parse_option(int argc, char** argv)
 {
     int opt;
     int idx = 0;
@@ -162,7 +184,6 @@ void parse_option(int argc, char** argv)
     {
         while( (opt = getopt(argc, argv, "s:v")) != -1)
         {
-            fprintf(stderr, "getopt returns %d\n", opt);
             // -1 means getopt() parse all options
             switch(opt)
             {
@@ -200,15 +221,39 @@ void parse_option(int argc, char** argv)
     }
 }
 
-void print_usage(char* executable)
+static void print_usage(char* executable)
 {
     fprintf(stderr, "Usage: %s [-s start_frame] [-v] infile outfile\n", executable);
 }
 
-void print_options()
+static void print_options()
 {
     fprintf(stdout, "infile: %s\n", infile);
     fprintf(stdout, "outfile: %s\n", outfile);
     fprintf(stdout, "start_frame: %d\n", start);
     fprintf(stdout, "\n");
+}
+
+static int outfile_open()
+{
+    if ((out = fopen(outfile, "wb")) == NULL)
+        return 0;
+
+    return 1;
+}
+
+static int outfile_write(unsigned char* payload, int size)
+{
+    const unsigned char startcode[] = { '\0', '\0', '\1' };
+
+    fwrite(startcode, 1, 3, out);
+    fwrite(payload, 1, size, out);
+
+    return 1;
+}
+
+static void outfile_close()
+{
+    if (out)
+        fclose(out);
 }
