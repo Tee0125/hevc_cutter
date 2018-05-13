@@ -10,4 +10,7 @@ make
 
 # Usage
 
-./hevc_cutter [-s start_frame_idx] input_filename output_filename
+./hevc_cutter [-s start_frame_idx] [-v] input_filename output_filename
+
+-v: verbose output
+
