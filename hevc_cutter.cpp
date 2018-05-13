@@ -138,6 +138,14 @@ int main(int argc, char** argv)
             frame_idx++;
         }
 
+        if (verbose)
+        {
+            if (nut < NUT_NUM)
+                fprintf(stdout, "nal found at 0x%x and nut is %s\n", nal.get_nal_offset(), nut_name[nut]);
+            if (nut < NUT_VCL_END)
+                fprintf(stdout, "frame_idx: %d - first slice flag: %d\n", frame_idx, nal.get_first_slice_flag());
+        }
+
         if (frame_idx >= start && nut >= NUT_RAP_START && nut <= NUT_RAP_END)
         {
             if (!rap_found)
@@ -149,20 +157,18 @@ int main(int argc, char** argv)
 
         if (rap_found)
         {
+            if (verbose)
+                fprintf(stdout, "write payload, size=0x%x\n", nal.get_nal_size());
+
             outfile_write(nal.get_nal_payload(), nal.get_nal_size());
         }
         else if (nut >= NUT_VPS && nut <= NUT_PPS)
         {
+            if (verbose)
+                fprintf(stdout, "write payload, size=0x%x\n", nal.get_nal_size());
+
             // VPS/SPS/PPS
             outfile_write(nal.get_nal_payload(), nal.get_nal_size());
-        }
-
-        if (verbose)
-        {
-            if (nut < NUT_NUM)
-                fprintf(stdout, "nal found at 0x%x and nut is %s\n", nal.get_nal_offset(), nut_name[nut]);
-            if (nut < NUT_VCL_END)
-                fprintf(stdout, "frame_idx: %d - first slice flag: %d\n", frame_idx, nal.get_first_slice_flag());
         }
     }
 

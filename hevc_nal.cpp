@@ -1,5 +1,6 @@
 #include "hevc_nal.h"
 
+
 int HevcNal::get_nal_unit_type()
 {
     if (nal_offset < 0 || nal_payload_size < 2)

@@ -49,6 +49,7 @@ int Nal::seek_start_code()
         {
             // save nal start position
             next_nal_offset = get_offset() - trailing_zeroes - 1;
+            trailing_zeroes = 0;
             break;
         }
         else if (code == 3 && trailing_zeroes >= 2)
